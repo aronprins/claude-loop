@@ -1,0 +1,50 @@
+{
+  "project": "MyApp",
+  "branchName": "feat/wagering-history",
+  "description": "User Wagering History - Persist and display each user's past wagers",
+  "userStories": [
+    {
+      "id": "WAGER-001",
+      "title": "Add wagers table to database schema",
+      "description": "As a developer, I need a database table to store wager records so we can persist user wagers across sessions.",
+      "acceptanceCriteria": [
+        "Migration creates a `wagers` table with id, userId, amount, outcome, createdAt",
+        "Foreign key constraint to users table",
+        "Index on userId for query performance",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "WAGER-002",
+      "title": "Add wager creation server action",
+      "description": "As a developer, I need a server action to create a new wager so the UI can submit wagers.",
+      "acceptanceCriteria": [
+        "Action validates input (amount > 0, userId exists)",
+        "Returns the created wager",
+        "Tests cover the happy path and validation errors",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "WAGER-003",
+      "title": "Build wager history list UI",
+      "description": "As a user, I want to see my past wagers in a list so I can review my activity.",
+      "acceptanceCriteria": [
+        "List shows last 50 wagers, newest first",
+        "Each row shows amount, outcome, and date",
+        "Empty state when no wagers exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
