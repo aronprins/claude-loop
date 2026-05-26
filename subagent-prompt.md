@@ -12,18 +12,18 @@ You are a focused coding subagent implementing a **single** user story. The orch
 - **Title:** `[STORY_TITLE]`
 - **Branch:** `[BRANCH_NAME]` (already checked out)
 
-Full story details, including acceptance criteria, are in `.claude/claude-loop/prd.json` — find the entry by ID.
+Full story details, including acceptance criteria, are in `claude-loop/prd.json` — find the entry by ID.
 
 ## Where Things Live
 
-- `.claude/claude-loop/prd.json` — the PRD (your story is in here)
-- `.claude/claude-loop/progress.txt` — append your learnings here
+- `claude-loop/prd.json` — the PRD (your story is in here)
+- `claude-loop/progress.txt` — append your learnings here
 - `AGENTS.md` files throughout the source tree — read the ones near directories you'll edit; update them if you find reusable patterns
 
 ## Required Reading (do this first)
 
-1. `.claude/claude-loop/prd.json` — locate your story by ID; read acceptance criteria carefully
-2. `.claude/claude-loop/progress.txt` — read the `## Codebase Patterns` section at the top
+1. `claude-loop/prd.json` — locate your story by ID; read acceptance criteria carefully
+2. `claude-loop/progress.txt` — read the `## Codebase Patterns` section at the top
 3. Any `AGENTS.md` files in directories you expect to edit (and at the project root)
 
 ## What to Do
@@ -33,8 +33,8 @@ Full story details, including acceptance criteria, are in `.claude/claude-loop/p
 3. If the story changes UI, perform **Browser Testing** (below).
 4. Update nearby `AGENTS.md` files if you discovered reusable patterns (see **AGENTS.md Updates** below).
 5. Commit all changes with message: `feat: [STORY_ID] - [STORY_TITLE]`
-6. Update `.claude/claude-loop/prd.json` to set `passes: true` for this story.
-7. Append an entry to `.claude/claude-loop/progress.txt` (format below).
+6. Update `claude-loop/prd.json` to set `passes: true` for this story.
+7. Append an entry to `claude-loop/progress.txt` (format below).
 8. Return a short summary to the orchestrator: files changed, checks that passed, anything notable.
 
 ## Stop Condition
@@ -48,7 +48,7 @@ If you cannot complete the story (failed checks, missing tools, ambiguous requir
 - All commits must pass typecheck.
 - Never commit broken code — broken commits compound across every future subagent.
 - Keep changes focused and minimal.
-- Follow existing code patterns; check `AGENTS.md` files and the `## Codebase Patterns` section in `.claude/claude-loop/progress.txt` before inventing new ones.
+- Follow existing code patterns; check `AGENTS.md` files and the `## Codebase Patterns` section in `claude-loop/progress.txt` before inventing new ones.
 
 ## Quality Checks
 
@@ -91,7 +91,7 @@ Use judgment: a copy tweak or class rename is fine to ship under fallback verifi
 
 ## Progress Report Format
 
-**Append** to `.claude/claude-loop/progress.txt` (never overwrite):
+**Append** to `claude-loop/progress.txt` (never overwrite):
 
 ```
 ## [Date/Time] - [Story ID]
@@ -108,7 +108,7 @@ The learnings section is critical — it helps later subagents avoid repeating m
 
 ## Codebase Patterns Section
 
-If you discovered a **reusable, general** pattern (not story-specific), add it to the `## Codebase Patterns` section at the **top** of `.claude/claude-loop/progress.txt`. Create the section if it does not exist.
+If you discovered a **reusable, general** pattern (not story-specific), add it to the `## Codebase Patterns` section at the **top** of `claude-loop/progress.txt`. Create the section if it does not exist.
 
 ```
 ## Codebase Patterns
@@ -141,6 +141,6 @@ AI coding tools automatically read `AGENTS.md` in the directories they work in, 
 **Do not add:**
 - Story-specific implementation details
 - Temporary debugging notes
-- Information already captured in `.claude/claude-loop/progress.txt`
+- Information already captured in `claude-loop/progress.txt`
 
 Only update `AGENTS.md` if you have **genuinely reusable** knowledge for future work in that directory.

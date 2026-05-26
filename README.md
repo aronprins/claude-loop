@@ -4,7 +4,7 @@
 
 Claude Loop is a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill that drives an autonomous coding workflow. You write a `prd.json` listing the user stories you want shipped; Claude works through them one by one, spawning a fresh subagent (via the `Task` tool) for each story. Each subagent implements its story, runs your tests, commits the work, and exits — so context never piles up across a long run.
 
-The state of the run lives in `.claude/claude-loop/`. The skill code lives in `.claude/skills/claude-loop/`. That's it — no scripts, no daemons, no external orchestrator.
+The state of the run lives in `claude-loop/`. The skill code lives in `.claude/skills/claude-loop/`. That's it — no scripts, no daemons, no external orchestrator.
 
 ## Why
 
@@ -30,7 +30,7 @@ The result: arbitrarily long runs that don't degrade.
 
 ```bash
 git clone https://github.com/YOUR-USER/claude-loop.git .claude/skills/claude-loop
-mkdir -p .claude/claude-loop
+mkdir -p claude-loop
 ```
 
 **Global (use across all your projects):**
@@ -39,24 +39,24 @@ mkdir -p .claude/claude-loop
 git clone https://github.com/YOUR-USER/claude-loop.git ~/.claude/skills/claude-loop
 ```
 
-The skill auto-loads in any Claude Code session inside a project where it's installed. For global installs, `.claude/claude-loop/` is created the first time you run the loop in a project.
+The skill auto-loads in any Claude Code session inside a project where it's installed. For global installs, `claude-loop/` is created the first time you run the loop in a project.
 
 ## Quick start
 
-1. Create `.claude/claude-loop/prd.json` at your project root. See [`prd.example.json`](./prd.example.json) for the shape.
+1. Create `claude-loop/prd.json` at your project root. See [`prd.example.json`](./prd.example.json) for the shape.
 2. Open Claude Code in your project.
 3. Say one of:
    - **"run the claude loop"**
    - "work through the prd"
    - "process prd.json"
 4. Claude reads the PRD, detects your stack, checks out the branch from `branchName`, and starts spawning subagents.
-5. When all stories pass, the run archives itself to `.claude/claude-loop/archive/YYYY-MM-DD-<branchName>-complete/` and Claude emits `<promise>COMPLETE</promise>`.
+5. When all stories pass, the run archives itself to `claude-loop/archive/YYYY-MM-DD-<branchName>-complete/` and Claude emits `<promise>COMPLETE</promise>`.
 
 ## How it works
 
 ```mermaid
 flowchart TD
-    Start([User: &quot;run the loop&quot;]) --> Read[Read .claude/claude-loop/prd.json<br/>+ progress.txt]
+    Start([User: &quot;run the loop&quot;]) --> Read[Read claude-loop/prd.json<br/>+ progress.txt]
     Read --> Setup[Detect stack<br/>Check out branch]
     Setup --> Check{Any stories with<br/>passes: false?}
     Check -->|Yes| Spawn[Spawn subagent via Task<br/>highest-priority story]
@@ -64,7 +64,7 @@ flowchart TD
     Work --> Verify{Orchestrator<br/>verifies work}
     Verify -->|OK| Check
     Verify -->|Blocker| Stop([Stop & report])
-    Check -->|No| Archive[Archive .claude/claude-loop/<br/>to archive/YYYY-MM-DD/]
+    Check -->|No| Archive[Archive claude-loop/<br/>to archive/YYYY-MM-DD/]
     Archive --> Done([Emit COMPLETE])
 ```
 
@@ -77,7 +77,7 @@ Subagents run **sequentially**, never in parallel — stories often touch overla
 
 ## The PRD
 
-`.claude/claude-loop/prd.json` is the task list. Minimal shape:
+`claude-loop/prd.json` is the task list. Minimal shape:
 
 ```json
 {
@@ -123,22 +123,24 @@ Three distinct locations inside your project — keep them straight:
 | Location | What it is | Who writes to it |
 |---|---|---|
 | `.claude/skills/claude-loop/` | The skill code | Nobody during a run (installed once) |
-| `.claude/claude-loop/` | Runtime state — PRD, progress log, branch tracking, archive | Orchestrator and subagents |
+| `claude-loop/` | Runtime state — PRD, progress log, branch tracking, archive | Orchestrator and subagents |
 | `AGENTS.md` files in source tree | Per-module knowledge, auto-read by Claude in each directory | Subagents, when they discover reusable patterns |
 
 `AGENTS.md` files live next to the code they describe (project root, module directories) — never inside `.claude/`. That placement is what makes them auto-load.
+
+**Why `claude-loop/` sits at the repo root, not in `.claude/`:** Claude Code treats every write under `.claude/` as sensitive and asks you to confirm it (that's where settings, hooks, and skills live). The loop rewrites `prd.json` and appends `progress.txt` on *every* story, so keeping runtime state in `.claude/` means a confirmation prompt on every single story — death by a thousand clicks on a long autonomous run. A top-level `claude-loop/` is covered by ordinary `Read`/`Edit`/`Write` permissions, so runs proceed uninterrupted. The skill *code* stays in `.claude/skills/claude-loop/` because it's read-only while the loop runs.
 
 A populated project looks like:
 
 ```
 your-project/
 ├── .claude/
-│   ├── skills/claude-loop/         # skill code
-│   └── loop/
-│       ├── prd.json                # your task list
-│       ├── progress.txt            # learnings log
-│       ├── .last-branch            # state tracking
-│       └── archive/                # past runs
+│   └── skills/claude-loop/         # skill code (installed once)
+├── claude-loop/                    # runtime state (created on first run)
+│   ├── prd.json                    # your task list
+│   ├── progress.txt                # learnings log
+│   ├── .last-branch                # state tracking
+│   └── archive/                    # past runs
 ├── AGENTS.md                       # project-level conventions
 ├── src/
 │   ├── auth/AGENTS.md              # module conventions
@@ -190,11 +192,11 @@ Most projects need zero configuration. To tune:
 Sensible defaults:
 
 - **Commit** `.claude/skills/claude-loop/` so your team gets the skill automatically.
-- **Commit** `.claude/claude-loop/prd.json` so the PRD is version-controlled with the feature branch.
-- **Commit** `.claude/claude-loop/progress.txt` and `.claude/claude-loop/archive/` if you want the learnings shared.
-- **Gitignore** `.claude/claude-loop/.last-branch` (local state).
+- **Commit** `claude-loop/prd.json` so the PRD is version-controlled with the feature branch.
+- **Commit** `claude-loop/progress.txt` and `claude-loop/archive/` if you want the learnings shared.
+- **Gitignore** `claude-loop/.last-branch` (local state).
 
-Or gitignore `.claude/claude-loop/` entirely and treat it as a personal workspace — both approaches work.
+Or gitignore `claude-loop/` entirely and treat it as a personal workspace — both approaches work.
 
 ## FAQ
 
@@ -208,7 +210,7 @@ Stories typically touch overlapping files. Parallel subagents would race on `git
 Yes — there's no upper limit on stories. Each one is independent. The constraint is on individual story size, not total story count.
 
 **Can I resume after stopping?**
-Yes. The PRD is the source of truth. On the next invocation, the orchestrator picks up from the next `passes: false` story. If you switched branches mid-run, the orchestrator archives the abandoned run to `.claude/claude-loop/archive/` before starting fresh.
+Yes. The PRD is the source of truth. On the next invocation, the orchestrator picks up from the next `passes: false` story. If you switched branches mid-run, the orchestrator archives the abandoned run to `claude-loop/archive/` before starting fresh.
 
 **Does this work with the Claude API directly?**
 No — it requires the `Task` tool, which is specific to Claude Code (and Claude.ai with subagents). The skill auto-loads in those environments.

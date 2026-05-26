@@ -18,23 +18,25 @@ The loop uses three distinct locations. Keep them straight:
 | Location | What it is | Who writes to it |
 |---|---|---|
 | `.claude/skills/claude-loop/` | This skill's code (SKILL.md, subagent-prompt.md, etc.) | Nobody during a run — installed once |
-| `.claude/claude-loop/` | The loop's **runtime state** (PRD, progress, branch tracking, archive) | Orchestrator and subagents |
+| `claude-loop/` | The loop's **runtime state** (PRD, progress, branch tracking, archive) | Orchestrator and subagents |
 | `AGENTS.md` files in source tree | Per-module knowledge (auto-read by AI coding tools) | Subagents, when they discover reusable patterns |
 
 `AGENTS.md` files live next to the code they describe (project root, module dirs) — they are not loop state and never go inside `.claude/`.
 
-### Runtime state files (all under `.claude/claude-loop/`)
+Runtime state lives at the **repo root** (`claude-loop/`), not under `.claude/`. Claude Code prompts for confirmation on every write inside `.claude/`, and the loop writes `prd.json` / `progress.txt` on each story — so root-level state keeps long autonomous runs prompt-free under ordinary `Read`/`Edit`/`Write` permissions. The skill code stays in `.claude/skills/claude-loop/` (read-only during a run).
 
-- `.claude/claude-loop/prd.json` — the task list (user creates this)
-- `.claude/claude-loop/progress.txt` — append-only learnings log with `## Codebase Patterns` section at top
-- `.claude/claude-loop/.last-branch` — tracks the last `branchName` worked on (used for archive-on-branch-change)
-- `.claude/claude-loop/archive/YYYY-MM-DD-<branchName>[-complete]/` — past runs
+### Runtime state files (all under `claude-loop/`)
+
+- `claude-loop/prd.json` — the task list (user creates this)
+- `claude-loop/progress.txt` — append-only learnings log with `## Codebase Patterns` section at top
+- `claude-loop/.last-branch` — tracks the last `branchName` worked on (used for archive-on-branch-change)
+- `claude-loop/archive/YYYY-MM-DD-<branchName>[-complete]/` — past runs
 
 ---
 
 ## Your Role
 
-1. Read `.claude/claude-loop/prd.json` and `.claude/claude-loop/progress.txt`
+1. Read `claude-loop/prd.json` and `claude-loop/progress.txt`
 2. Detect the project stack (typecheck, test commands)
 3. Manage the git branch (create/checkout, archive on branch change)
 4. Spawn one subagent per story, sequentially (never in parallel)
@@ -47,7 +49,7 @@ You do not edit application code, run builds, or make feature commits yourself. 
 
 ## Core Concepts
 
-**Each subagent has fresh context.** A subagent only knows what it reads from disk (`.claude/claude-loop/prd.json`, `.claude/claude-loop/progress.txt`, `AGENTS.md` files, source code) plus its prompt. The persistent memory between subagents is git history, `.claude/claude-loop/progress.txt`, and `.claude/claude-loop/prd.json`. This is intentional — it prevents context bloat and forces important learnings to be written down.
+**Each subagent has fresh context.** A subagent only knows what it reads from disk (`claude-loop/prd.json`, `claude-loop/progress.txt`, `AGENTS.md` files, source code) plus its prompt. The persistent memory between subagents is git history, `claude-loop/progress.txt`, and `claude-loop/prd.json`. This is intentional — it prevents context bloat and forces important learnings to be written down.
 
 **Small stories only.** Each story must fit comfortably in one subagent's context window. If a subagent reports a story is too large, treat it as a blocker. The PRD needs to be split before continuing.
 
@@ -70,7 +72,7 @@ Run all checks, then print a single summary block. Treat checks as either **requ
 **Required checks** (halt the loop if any fail — print the remediation, then stop):
 
 - **Git repository present.** `git rev-parse --is-inside-work-tree` succeeds. *If missing:* tell the user to run `git init` (or `cd` into the right directory) and re-invoke the skill.
-- **`.claude/claude-loop/prd.json` exists.** *If missing:* create `.claude/claude-loop/` if needed (`mkdir -p .claude/claude-loop`), then point the user at `.claude/skills/claude-loop/prd.example.json` for the expected shape and ask them to create `.claude/claude-loop/prd.json`.
+- **`claude-loop/prd.json` exists.** *If missing:* create `claude-loop/` if needed (`mkdir -p claude-loop`), then point the user at `.claude/skills/claude-loop/prd.example.json` for the expected shape and ask them to create `claude-loop/prd.json`.
 - **Main branch resolvable.** Either `main` or `master` exists locally or on `origin`. *If missing:* ask the user which branch the loop should base feature branches from.
 - **PRD has at least one story with `passes: false`.** *If empty:* nothing to do — tell the user and stop.
 
@@ -117,21 +119,21 @@ If any **required** check failed, do not ask to continue — print the remediati
 
 ### 2. Read state files
 
-- Read `.claude/claude-loop/prd.json` — note `branchName` and the `userStories` array
-- Read `.claude/claude-loop/progress.txt` if it exists — pay special attention to the `## Codebase Patterns` section at the top
-- If `.claude/claude-loop/progress.txt` doesn't exist, create it empty
+- Read `claude-loop/prd.json` — note `branchName` and the `userStories` array
+- Read `claude-loop/progress.txt` if it exists — pay special attention to the `## Codebase Patterns` section at the top
+- If `claude-loop/progress.txt` doesn't exist, create it empty
 
 ### 3. Branch handling
 
-Check for `.claude/claude-loop/.last-branch`:
+Check for `claude-loop/.last-branch`:
 
-- **If `.last-branch` exists and differs from PRD `branchName`** → the previous run is incomplete and being abandoned. Archive it to `.claude/claude-loop/archive/YYYY-MM-DD-<previous-branchName>/` (move `prd.json`, `progress.txt`, `.last-branch` into the archive). Then re-read the new `.claude/claude-loop/prd.json`.
+- **If `.last-branch` exists and differs from PRD `branchName`** → the previous run is incomplete and being abandoned. Archive it to `claude-loop/archive/YYYY-MM-DD-<previous-branchName>/` (move `prd.json`, `progress.txt`, `.last-branch` into the archive). Then re-read the new `claude-loop/prd.json`.
 - Check out PRD `branchName`. If it does not exist, create it from `main` (or `master` if that's the default branch).
-- Write the current `branchName` to `.claude/claude-loop/.last-branch`.
+- Write the current `branchName` to `claude-loop/.last-branch`.
 
 ### 4. Build the worklist
 
-Filter `.claude/claude-loop/prd.json` `userStories` to those with `passes: false`, sorted by priority (lowest number = highest priority, processed first). If the worklist is empty, jump straight to **Completion**.
+Filter `claude-loop/prd.json` `userStories` to those with `passes: false`, sorted by priority (lowest number = highest priority, processed first). If the worklist is empty, jump straight to **Completion**.
 
 ---
 
@@ -159,8 +161,8 @@ Call `Task` with the filled-in prompt. Wait for the subagent to finish.
 When the subagent returns, confirm:
 
 - A commit exists with message `feat: [Story ID] - [Story Title]`
-- `.claude/claude-loop/prd.json` now has `passes: true` for the completed story
-- `.claude/claude-loop/progress.txt` has a newly appended entry
+- `claude-loop/prd.json` now has `passes: true` for the completed story
+- `claude-loop/progress.txt` has a newly appended entry
 - The subagent reported that typecheck and relevant tests passed (or schema-only changes legitimately skipped tests)
 - For frontend stories, browser verification was performed (or explicitly flagged as blocked)
 
@@ -175,10 +177,10 @@ When the subagent returns, confirm:
 
 ## Completion
 
-When every story in `.claude/claude-loop/prd.json` has `passes: true`:
+When every story in `claude-loop/prd.json` has `passes: true`:
 
-1. **Archive the run.** Move `prd.json`, `progress.txt`, and `.last-branch` from `.claude/claude-loop/` into `.claude/claude-loop/archive/YYYY-MM-DD-<branchName>-complete/` (create the directory). This preserves history and clears `.claude/claude-loop/` for the next PRD.
-2. **Verify `.claude/claude-loop/` is clean** of the three working files at its root (the `archive/` subfolder remains).
+1. **Archive the run.** Move `prd.json`, `progress.txt`, and `.last-branch` from `claude-loop/` into `claude-loop/archive/YYYY-MM-DD-<branchName>-complete/` (create the directory). This preserves history and clears `claude-loop/` for the next PRD.
+2. **Verify `claude-loop/` is clean** of the three working files at its root (the `archive/` subfolder remains).
 3. **Emit the completion signal:**
 
    ```
