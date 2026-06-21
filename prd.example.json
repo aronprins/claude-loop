@@ -13,6 +13,7 @@
         "Index on userId for query performance",
         "Typecheck passes"
       ],
+      "dependsOn": [],
       "priority": 1,
       "passes": false,
       "notes": ""
@@ -27,6 +28,7 @@
         "Tests cover the happy path and validation errors",
         "Typecheck passes"
       ],
+      "dependsOn": ["WAGER-001"],
       "priority": 2,
       "passes": false,
       "notes": ""
@@ -42,6 +44,7 @@
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
+      "dependsOn": ["WAGER-002"],
       "priority": 3,
       "passes": false,
       "notes": ""
