@@ -49,6 +49,7 @@ The skill auto-loads in any Claude Code session inside a project where it's inst
    - **"run the claude loop"**
    - "work through the prd"
    - "process prd.json"
+   - or, for concurrent execution: **"run the loop in parallel"** (see [Parallel mode](#parallel-mode-waves))
 4. Claude reads the PRD, detects your stack, checks out the branch from `branchName`, and starts spawning subagents.
 5. When all stories pass, the run archives itself to `claude-loop/archive/YYYY-MM-DD-<branchName>-complete/` and Claude emits `<promise>COMPLETE</promise>`.
 
@@ -73,7 +74,7 @@ Two roles, one Claude Code session:
 - **Orchestrator** (the main Claude session): reads the PRD, manages the git branch, spawns subagents via `Task`, verifies their output, archives when done. Never touches application code itself.
 - **Subagent** (one fresh `Task` invocation per story): implements one story, runs checks, commits, updates the PRD, logs learnings, exits.
 
-Subagents run **sequentially**, never in parallel — stories often touch overlapping files, and parallel execution would race on git, the PRD, and `progress.txt`.
+By default, subagents run **sequentially** — stories often touch overlapping files, and naive parallel execution would race on git, the PRD, and `progress.txt`. For independent stories you can opt into **[parallel wave mode](#parallel-mode-waves)**, which adds the isolation (git worktrees) and coordination (a merge+verify barrier) needed to run a wave concurrently without those races.
 
 ## The PRD
 
@@ -110,6 +111,7 @@ The shape mirrors [Ryan Carson's Ralph](https://github.com/snarktank/ralph) `prd
 - `description` (top-level) — one-line feature summary
 - `userStories[].description` — single string, typically in "As a X, I want Y so that Z" form
 - `priority` — lower number = higher priority, processed first
+- `dependsOn` *(optional)* — array of story IDs that must pass before this one starts. Ignored by the sequential loop; used by **[parallel mode](#parallel-mode-waves)** to compute waves of independent stories. Omit or leave `[]` for no prerequisites.
 - `passes` — starts `false`, flipped to `true` when the story commits
 - `notes` — free-form scratchpad; subagents may append context here (e.g. blockers, partial progress)
 - `acceptanceCriteria` — explicit and testable. **The richer these are, the better the implementation.** If a constraint isn't here, the subagent won't enforce it.
@@ -155,7 +157,36 @@ your-project/
 
 **`AGENTS.md` is where knowledge compounds.** When a subagent discovers a non-obvious convention or gotcha (e.g. "when modifying X, also update Y to keep them in sync"), it records it in the closest `AGENTS.md` in the source tree. Future subagents auto-read these. This is more durable than burying it in `progress.txt`.
 
-**Sequential, never parallel.** Stories overlap on files. Sequential execution keeps git, the PRD, and `progress.txt` consistent. There is no "speed up by running stories in parallel" mode by design.
+**Sequential by default; parallel when you ask.** Stories overlap on files, so the default is one-at-a-time — that keeps git, the PRD, and `progress.txt` consistent with zero ceremony. When stories are genuinely independent (declared via `dependsOn`), **[parallel wave mode](#parallel-mode-waves)** runs them concurrently in isolated git worktrees and merges at a barrier. Parallelism is bounded by the dependency graph, not by how many agents you launch — a deep chain barely parallelizes; a wide PRD parallelizes a lot.
+
+## Parallel mode (waves)
+
+By default the loop is sequential. If your stories are independent, you can run them concurrently:
+
+1. Add a `dependsOn` array to each story in `prd.json` (the IDs that must finish first).
+2. Invoke with a parallel phrasing — **"run the loop in parallel"**, "run the stories in tandem", "run as waves", or "fan out the loop".
+
+The orchestrator then:
+
+- **Computes waves** from the dependency graph. A wave is the set of not-yet-done stories whose dependencies are all satisfied, capped at a concurrency limit (default 4).
+- **Isolates each story in its own git worktree** (`claude-loop/.worktrees/<id>`), all branched off your feature branch — so concurrent subagents can't collide on files or git state.
+- **Runs the wave concurrently**, then hits a **barrier**: it waits for all of them, merges each worktree branch back into the feature branch one at a time, and re-runs typecheck/tests on the *integrated* result before starting the next wave.
+- **Owns the shared state.** In parallel mode subagents never write `prd.json` / `progress.txt` (that would race); they return their results and the orchestrator records them once per wave.
+
+```
+Wave 1: AUTH-001
+Wave 2: AUTH-002, AUTH-003, AUTH-004     # run together, merged at the barrier
+Wave 3: AUTH-005                          # unblocked once wave 2 merges
+```
+
+**Tradeoffs to know:**
+
+- **Speedup is bounded by the dependency graph.** A linear chain of stories barely parallelizes; a PRD with many independent stories parallelizes well.
+- **Merge conflicts are the failure mode.** The orchestrator auto-resolves only trivially-additive conflicts; anything semantic it aborts and reports rather than guessing. Minimize this by preferring additive patterns (a new file per route/registration over edits to one shared file) and by installing all dependencies in the first scaffolding story.
+- **Requires a clean working tree and Git ≥ 2.5** (for `git worktree`).
+- **Still safe to stop anytime.** The PRD remains the source of truth; resume picks up the next ready wave.
+
+Prefer sequential mode for short PRDs, or ones where almost every story builds on the previous — the coordination overhead isn't worth it there.
 
 ## Stack support
 
@@ -194,7 +225,7 @@ Sensible defaults:
 - **Commit** `.claude/skills/claude-loop/` so your team gets the skill automatically.
 - **Commit** `claude-loop/prd.json` so the PRD is version-controlled with the feature branch.
 - **Commit** `claude-loop/progress.txt` and `claude-loop/archive/` if you want the learnings shared.
-- **Gitignore** `claude-loop/.last-branch` (local state).
+- **Gitignore** `claude-loop/.last-branch` (local state) and `claude-loop/.worktrees/` (transient per-story checkouts created by parallel mode).
 
 Or gitignore `claude-loop/` entirely and treat it as a personal workspace — both approaches work.
 
@@ -203,8 +234,8 @@ Or gitignore `claude-loop/` entirely and treat it as a personal workspace — bo
 **Why not just run Claude Code in one long session?**
 Context degrades as it fills. Fresh subagents per story keep each implementation crisp regardless of how many stories you've shipped. The orchestrator's context is also small — it only holds high-level state, not implementation details.
 
-**Why not run subagents in parallel for speed?**
-Stories typically touch overlapping files. Parallel subagents would race on `git`, the PRD, and `progress.txt`. The single-context-window-per-story constraint is what makes the workflow reliable; speed isn't the goal.
+**Can I run subagents in parallel for speed?**
+Yes — opt into **[parallel wave mode](#parallel-mode-waves)**. The reason it isn't the *default*: stories typically touch overlapping files, and naive parallelism races on `git`, the PRD, and `progress.txt`. Parallel mode removes those races with git worktrees (isolation) and an orchestrator-owned merge+verify barrier (coordination), and only runs stories whose `dependsOn` is satisfied. Sequential stays the default because it's simpler and needs no dependency graph.
 
 **My PRD has 30 stories. Is that fine?**
 Yes — there's no upper limit on stories. Each one is independent. The constraint is on individual story size, not total story count.
@@ -221,7 +252,8 @@ The orchestrator stops on a blocker and reports it; it does not auto-retry. Usua
 ## Files
 
 - [`SKILL.md`](./SKILL.md) — orchestrator instructions (auto-read by Claude when the skill triggers)
-- [`subagent-prompt.md`](./subagent-prompt.md) — template passed to each subagent via `Task`
+- [`subagent-prompt.md`](./subagent-prompt.md) — template passed to each subagent via `Task` (sequential mode)
+- [`parallel-subagent-prompt.md`](./parallel-subagent-prompt.md) — worktree-aware template for parallel wave mode
 - [`prd.example.json`](./prd.example.json) — reference PRD shape
 - `README.md` — this file
 
